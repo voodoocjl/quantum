@@ -15,6 +15,7 @@ from layers.complexnn.l2_norm import L2Norm
 from layers.quantumnn.dense import QDense
 from layers.quantumnn.dropout import QDropout
 import pennylane as qml
+from layers.quantumnn.vqc import QFN
 
 
 class QMN_VQC(nn.Module):
@@ -26,6 +27,9 @@ class QMN_VQC(nn.Module):
         self.embed_dim = opt.embed_dim
         self.speaker_num = opt.speaker_num
         self.dataset_name = opt.dataset_name
+        self.n_qubits = 3
+        self.n_ansartz_layers = 1
+        self.n_fusion_layers = 1
         
         # MELD data 
         # The one-hot vectors are not the global user ID
@@ -33,12 +37,12 @@ class QMN_VQC(nn.Module):
             self.speaker_num = 1
         self.n_classes = opt.output_dim
         self.projections = nn.ModuleList([nn.Linear(dim, self.embed_dim) for dim in self.input_dims])
-        
+               
         self.multiply = ComplexMultiply()
         self.outer = QOuter()
         self.ket = QKet()
         self.norm = L2Norm(dim = -1)
-        self.mixture = QMixture(device = self.device)
+        self.mixture = QFN(self.n_qubits, self.n_ansartz_layers, self.n_fusion_layers)
         self.output_cell_dim = opt.output_cell_dim
         self.phase_embeddings = nn.ModuleList([PositionEmbedding(self.embed_dim, input_dim = self.speaker_num, device = self.device)]* len(self.input_dims)) 
         self.out_dropout_rate = opt.out_dropout_rate
@@ -83,17 +87,17 @@ class QMN_VQC(nn.Module):
 
         # Take the amplitudes 
         # multiply with modality specific vectors to construct weights
-        weights = [self.norm(rep) for rep in utterance_reps]
-        weights = F.softmax(torch.cat(weights, dim = -1), dim = -1)
+        # weights = nn.Parameter(torch.rand( self.n_ansartz_layers, self.n_fusion_layers+1, 3, 3))
+        
         
         amplitudes = [F.normalize(rep, dim = -1) for rep in utterance_reps]
         phases = [phase_embed(smask.argmax(dim = -1)) for phase_embed in self.phase_embeddings]
 
         unimodal_pure = [self.multiply([phase, amplitude]) for phase, amplitude in zip(phases,amplitudes)]
         #unimodal_matrices = [self.outer(s) for s in unimodal_pure]
-        unimodal_matrices = [self.ket(s) for s in unimodal_pure]
+        unimodal_matrices = [self.ket(s) for s in unimodal_pure]        #size: [3,33,2,[32,50]]
         
-        in_states = self.mixture([unimodal_matrices, weights])
+        in_states = self.mixture(unimodal_matrices)          #size: [33,2,[32,50]]
         #in_states = self.mixture([unimodal_pure, weights])
         
         for l in range(self.num_layers):

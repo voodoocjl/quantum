@@ -17,6 +17,7 @@ from .MFN import MFN
 from .LSTHM import LSTHM
 from .LFLSTM import LFLSTM
 from .MULT import MULT
+from .QMN_VQC import QMN_VQC
 
 def setup(opt):
     
@@ -53,6 +54,8 @@ def setup(opt):
         model = QAttN(opt)
     elif opt.network_type == 'qmn':
         model = QMN(opt)
+    elif opt.network_type == 'qmn_vqc':
+        model = QMN_VQC(opt)    
     elif opt.network_type == 'qmn-ablation':
         model = QMNAblation(opt)
     elif opt.network_type == 'ccmf':
